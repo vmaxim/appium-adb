@@ -401,7 +401,7 @@ describe('adb commands', () => {
       it('should call shell with correct args for real device', async () => {
         mocks.adb.expects("shell")
           .once().withExactArgs(['am', 'broadcast', '-a', 'io.appium.settings.wifi',
-            '-n', 'io.appium.settings/.receivers.WiFiStatusReceiver',
+            '-n', 'io.appium.settings/.receivers.WiFiConnectionSettingReceiver',
             '--es', 'setstatus', 'enable'])
           .returns("");
         await adb.setWifiState(true);
@@ -435,7 +435,7 @@ describe('adb commands', () => {
       it('should call shell with correct args for real device', async () => {
         mocks.adb.expects("shell")
           .once().withExactArgs(['am', 'broadcast', '-a', 'io.appium.settings.data_connection',
-            '-n', 'io.appium.settings/.receivers.DataConnectionStatusReceiver',
+            '-n', 'io.appium.settings/.receivers.DataConnectionSettingReceiver',
             '--es', 'setstatus', 'disable'])
           .returns("");
         await adb.setDataState(false);
@@ -453,7 +453,7 @@ describe('adb commands', () => {
       it('should call shell with correct args when turning only wifi on for real device', async () => {
         mocks.adb.expects("shell")
           .once().withExactArgs(['am', 'broadcast', '-a', 'io.appium.settings.wifi',
-            '-n', 'io.appium.settings/.receivers.WiFiStatusReceiver',
+            '-n', 'io.appium.settings/.receivers.WiFiConnectionSettingReceiver',
             '--es', 'setstatus', 'enable'])
           .returns("");
         await adb.setWifiAndData({wifi: true});
@@ -476,7 +476,7 @@ describe('adb commands', () => {
       it('should call shell with correct args when turning only data off for real device', async () => {
         mocks.adb.expects("shell")
           .once().withExactArgs(['am', 'broadcast', '-a', 'io.appium.settings.data_connection',
-            '-n', 'io.appium.settings/.receivers.DataConnectionStatusReceiver',
+            '-n', 'io.appium.settings/.receivers.DataConnectionSettingReceiver',
             '--es', 'setstatus', 'disable'])
           .returns("");
         await adb.setWifiAndData({data: false});
@@ -617,11 +617,43 @@ describe('adb commands', () => {
       });
     }));
     describe('killProcessByPID', withMocks({adb}, (mocks) => {
+      const pid = 5078;
+
       it('should call kill process correctly', async () => {
         mocks.adb.expects("shell")
-          .once().withExactArgs(['kill', 5078])
-          .returns();
-        await adb.killProcessByPID(5078);
+          .once().withExactArgs(['kill', '-0', pid])
+          .returns('');
+        mocks.adb.expects("shell")
+          .withExactArgs(['kill', pid])
+          .onCall(0)
+          .returns('');
+        mocks.adb.expects("shell")
+          .withExactArgs(['kill', pid])
+          .onCall(1)
+          .throws();
+        await adb.killProcessByPID(pid);
+        mocks.adb.verify();
+      });
+
+      it('should force kill process if normal kill fails', async () => {
+        mocks.adb.expects("shell")
+          .once().withExactArgs(['kill', '-0', pid])
+          .returns('');
+        mocks.adb.expects("shell")
+          .atLeast(2).withExactArgs(['kill', pid])
+          .returns('');
+        mocks.adb.expects("shell")
+          .once().withExactArgs(['kill', '-9', pid])
+          .returns('');
+        await adb.killProcessByPID(pid);
+        mocks.adb.verify();
+      });
+
+      it('should throw an error if a process with given ID does not exist', async () => {
+        mocks.adb.expects("shell")
+          .once().withExactArgs(['kill', '-0', pid])
+          .throws();
+        adb.killProcessByPID(pid).should.eventually.be.rejected;
         mocks.adb.verify();
       });
     }));
